@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 智能八字系统 (V9.0 硅基版)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lunar-javascript/lunar.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/zh.js"></script>
+
+    <style>
+        body { background-color: #f4f5f7; font-family: 'PingFang SC', sans-serif; }
+        .pillar-card { 
+            @apply bg-white border border-gray-200 rounded-lg p-3 flex flex-col items-center relative shadow-sm hover:shadow-md transition-shadow; 
+            min-height: 290px; 
+        }
+        .pillar-head { @apply text-xs font-bold text-gray-500 mb-1 bg-gray-100 px-2 py-0.5 rounded; }
+        .gan-zhi { @apply text-3xl font-extrabold text-gray-800 my-1; }
+        .na-yin { @apply text-[10px] text-teal-600 border border-teal-100 px-1 rounded mb-2; }
+        .hidden-stems { @apply w-full text-left text-xs text-gray-600 border-t border-dashed border-gray-200 pt-2 mt-1 space-y-1; }
+        .life-stage { @apply absolute top-2 right-2 text-[10px] font-bold text-blue-600 bg-blue-50 px-1 rounded; }
+        .kong-wang { @apply absolute top-2 left-2 text-[10px] text-gray-400 border border-gray-300 px-1 rounded; }
+        .info-badge { @apply flex flex-col items-center bg-white p-2 rounded border text-xs; }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px; height: 36px; border-radius: 50%;
+            border-left-color: #7c3aed;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="py-6 px-2 md:px-6">
+
+<div class="max-w-5xl mx-auto">
+    
+    <div class="bg-white p-4 rounded-xl shadow-sm mb-5 border-l-4 border-purple-600 flex flex-col md:flex-row gap-4 justify-between items-center">
+        <div>
+            <h1 class="text-xl font-bold text-gray-800 flex items-center">
+                🔮 乾坤 · AI 八字
+                <span class="ml-2 text-[10px] bg-purple-600 text-white px-2 py-0.5 rounded-full">V9.0 SiliconFlow</span>
+            </h1>
+            <p class="text-xs text-gray-500 mt-1">支持 Gemini & 硅基流动 (DeepSeek/Qwen)</p>
+        </div>
+        <div class="w-full md:w-auto flex flex-col md:flex-row gap-2">
+             <select id="modelSelect" onchange="updatePlaceholder()" class="p-2 border rounded text-xs bg-gray-50 font-bold text-gray-700 w-full md:w-48">
+                <optgroup label="硅基流动 (SiliconFlow)">
+                    <option value="deepseek-ai/DeepSeek-V3">DeepSeek V3 (推荐)</option>
+                    <option value="deepseek-ai/DeepSeek-R1">DeepSeek R1 (深度推理)</option>
+                    <option value="Qwen/Qwen2.5-72B-Instruct">通义千问 Qwen2.5</option>
+                </optgroup>
+                <optgroup label="Google Gemini">
+                    <option value="gemini-2.5-flash">Gemini 2.5 Flash (极速)</option>
+                </optgroup>
+             </select>
+             <input type="password" id="apiKey" class="p-2 border rounded text-xs w-full md:w-64" placeholder="输入硅基流动 Key (sk-...)">
+        </div>
+    </div>
+
+    <div class="bg-white p-5 rounded-xl shadow-lg mb-6">
+        <div class="grid grid-cols-2 md:grid-cols-6 gap-3">
+            <div class="col-span-1"><label class="text-xs font-bold text-gray-500">姓名</label><input type="text" id="name" class="w-full p-2 border rounded text-sm"></div>
+            <div class="col-span-1"><label class="text-xs font-bold text-gray-500">性别</label><select id="gender" class="w-full p-2 border rounded text-sm"><option value="1">男</option><option value="0">女</option></select></div>
+            <div class="col-span-2"><label class="text-xs font-bold text-gray-500">公历日期</label><input type="text" id="birthDate" class="w-full p-2 border rounded text-sm bg-white" placeholder="选择日期"></div>
+            <div class="col-span-1"><label class="text-xs font-bold text-gray-500">时间</label><input type="time" id="birthTime" class="w-full p-2 border rounded text-sm" value="12:00"></div>
+            <div class="col-span-1"><label class="text-xs font-bold text-gray-500">经度(真太阳)</label><input type="number" id="longitude" class="w-full p-2 border rounded text-sm" placeholder="120" value="120"></div>
+        </div>
+        <button onclick="calculate()" id="submitBtn" class="w-full mt-4 bg-purple-600 text-white font-bold py-3 rounded hover:bg-purple-700 transition shadow">
+            🌌 启动 AI 批断
+        </button>
+    </div>
+
+    <div id="resultPanel" class="hidden animate-fade-in-up">
+        
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div class="pillar-card" id="yearCard"></div>
+            <div class="pillar-card" id="monthCard"></div>
+            <div class="pillar-card border-purple-400 ring-2 ring-purple-100" id="dayCard"></div>
+            <div class="pillar-card" id="hourCard"></div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="bg-white p-4 rounded-lg shadow-sm border col-span-1">
+                <h3 class="text-xs font-bold text-gray-500 mb-2 border-b pb-1">命宫 · 胎元 · 五行</h3>
+                <div class="flex gap-2 mb-3">
+                    <div class="info-badge flex-1">
+                        <span class="text-gray-400 scale-75">胎元</span>
+                        <strong class="text-lg text-gray-700" id="taiYuan">--</strong>
+                    </div>
+                    <div class="info-badge flex-1">
+                        <span class="text-gray-400 scale-75">命宫</span>
+                        <strong class="text-lg text-gray-700" id="mingGong">--</strong>
+                    </div>
+                </div>
+                <div class="space-y-1" id="wuxingStats"></div>
+            </div>
+
+            <div class="bg-white p-4 rounded-lg shadow-sm border col-span-1 md:col-span-2">
+                <h3 class="text-xs font-bold text-gray-500 mb-2 border-b pb-1 flex justify-between">
+                    <span>十年大运</span>
+                    <span id="startYunInfo" class="font-normal text-purple-600">--岁起运</span>
+                </h3>
+                <div class="flex overflow-x-auto pb-2 gap-2" id="dayunList"></div>
+            </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-xl shadow-lg border-t-4 border-purple-600 min-h-[400px]">
+            <div class="flex items-center gap-3 mb-6">
+                <h3 class="text-xl font-bold text-purple-900">🤖 AI 大师批断报告</h3>
+                <div id="aiStatus" class="text-xs text-gray-400">waiting...</div>
+            </div>
+            <div id="aiLoading" class="hidden flex flex-col items-center justify-center py-20">
+                <div class="spinner mb-4"></div>
+                <p class="text-gray-500 font-medium">正在连接模型推演天机...</p>
+                <p class="text-xs text-gray-400 mt-2" id="loadingText">深度思考中，请耐心等待 15-30 秒</p>
+            </div>
+            <div id="aiContent" class="prose prose-sm md:prose-base max-w-none hidden text-gray-700"></div>
+            <div id="aiError" class="hidden bg-red-50 text-red-700 p-4 rounded border border-red-200"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    flatpickr("#birthDate", { locale: "zh", defaultDate: "1990-01-01", allowInput: true });
+
+    // 动态更新 Placeholder
+    function updatePlaceholder() {
+        const model = document.getElementById('modelSelect').value;
+        const input = document.getElementById('apiKey');
+        if (model.includes('gemini')) {
+            input.placeholder = "输入 Gemini Key (AIza开头)";
+        } else {
+            input.placeholder = "输入硅基流动 Key (sk-开头)";
+        }
+    }
+    // 初始化调用一次
+    updatePlaceholder();
+
+    // ==========================================
+    // 🛡️ 核心数据字典 (内置保障)
+    // ==========================================
+    const ZHI_CANG_GAN = {
+        '子': ['癸'], '丑': ['己','癸','辛'], '寅': ['甲','丙','戊'], '卯': ['乙'],
+        '辰': ['戊','乙','癸'], '巳': ['丙','庚','戊'], '午': ['丁','己'], '未': ['己','丁','乙'],
+        '申': ['庚','壬','戊'], '酉': ['辛'], '戌': ['戊','辛','丁'], '亥': ['壬','甲']
+    };
+    const WUXING_MAP = {
+        '甲':'木', '乙':'木', '丙':'火', '丁':'火', '戊':'土', '己':'土', '庚':'金', '辛':'金', '壬':'水', '癸':'水',
+        '子':'水', '丑':'土', '寅':'木', '卯':'木', '辰':'土', '巳':'火', '午':'火', '未':'土', '申':'金', '酉':'金', '戌':'土', '亥':'水'
+    };
+
+    function calculateLifeStage(gan, zhi) {
+        if(!gan || !zhi) return "";
+        const stages = ["长生", "沐浴", "冠带", "临官", "帝旺", "衰", "病", "死", "墓", "绝", "胎", "养"];
+        const zhis = ["子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥"];
+        const map = {
+            "甲": { start: "亥", forward: true }, "乙": { start: "午", forward: false },
+            "丙": { start: "寅", forward: true }, "丁": { start: "酉", forward: false },
+            "戊": { start: "寅", forward: true }, "己": { start: "酉", forward: false },
+            "庚": { start: "巳", forward: true }, "辛": { start: "子", forward: false },
+            "壬": { start: "申", forward: true }, "癸": { start: "卯", forward: false }
+        };
+        const config = map[gan];
+        if (!config) return "";
+        const sIdx = zhis.indexOf(config.start);
+        const tIdx = zhis.indexOf(zhi);
+        let diff = config.forward ? (tIdx - sIdx + 12) % 12 : (sIdx - tIdx + 12) % 12;
+        return stages[diff];
+    }
+
+    function toStr(obj) {
+        try {
+            if (typeof obj === 'string') return obj;
+            if (obj && typeof obj.getName === 'function') return obj.getName();
+            if (obj && typeof obj.toString === 'function') return obj.toString();
+        } catch(e) { return ""; }
+        return "";
+    }
+
+    async function calculate() {
+        let apiKey = document.getElementById('apiKey').value.trim() || 'sk-msfvfnjqwkuvoipqpuedvvitadhjhdmjsycirrbhbncwtiaw';
+        const model = document.getElementById('modelSelect').value;
+        const name = document.getElementById('name').value;
+        const gender = parseInt(document.getElementById('gender').value);
+        const dateStr = document.getElementById('birthDate').value;
+        const timeStr = document.getElementById('birthTime').value;
+        const lng = parseFloat(document.getElementById('longitude').value) || 120.0;
+
+        if(!apiKey) { alert("请填入 API Key"); return; }
+        if(!name || !dateStr) { alert("请填写完整信息"); return; }
+
+        const btn = document.getElementById('submitBtn');
+        btn.disabled = true; btn.innerHTML = "⏳ 正在演算中...";
+        document.getElementById('resultPanel').classList.remove('hidden');
+        document.getElementById('aiContent').classList.add('hidden');
+        document.getElementById('aiLoading').classList.remove('hidden');
+        document.getElementById('aiError').classList.add('hidden');
+        
+        // 更新加载提示
+        document.getElementById('aiStatus').innerText = `正在连接 ${model}...`;
+
+        try {
+            // 1. 排盘计算
+            const [y, m, d] = dateStr.split('-').map(Number);
+            const [hh, mm] = timeStr.split(':').map(Number);
+            const offset = (lng - 120) * 4;
+            let date = new Date(y, m - 1, d, hh, mm);
+            date.setMinutes(date.getMinutes() + offset);
+
+            const solar = Solar.fromYmdHms(date.getFullYear(), date.getMonth()+1, date.getDate(), date.getHours(), date.getMinutes(), 0);
+            const lunar = solar.getLunar();
+            const bazi = lunar.getEightChar();
+            
+            const yearGan = toStr(bazi.getYearGan()); const yearZhi = toStr(bazi.getYearZhi());
+            const monthGan = toStr(bazi.getMonthGan()); const monthZhi = toStr(bazi.getMonthZhi());
+            const dayGan = toStr(bazi.getDayGan()); const dayZhi = toStr(bazi.getDayZhi());
+            const hourGan = toStr(bazi.getTimeGan()); const hourZhi = toStr(bazi.getTimeZhi());
+
+            const dataMap = {
+                year: { gan: yearGan, zhi: yearZhi, nayin: toStr(bazi.getYearNaYin()), xunkong: toStr(bazi.getYearXunKong()) },
+                month: { gan: monthGan, zhi: monthZhi, nayin: toStr(bazi.getMonthNaYin()), xunkong: toStr(bazi.getMonthXunKong()) },
+                day: { gan: dayGan, zhi: dayZhi, nayin: toStr(bazi.getDayNaYin()), xunkong: toStr(bazi.getDayXunKong()) },
+                hour: { gan: hourGan, zhi: hourZhi, nayin: toStr(bazi.getTimeNaYin()), xunkong: toStr(bazi.getTimeXunKong()) }
+            };
+
+            const renderPillar = (title, d, isDay=false) => {
+                const changsheng = calculateLifeStage(dayGan, d.zhi);
+                const hiddenArr = ZHI_CANG_GAN[d.zhi] || [];
+                let hiddenHTML = '';
+                hiddenArr.forEach(g => { hiddenHTML += `<div>${g}</div>`; });
+
+                return {
+                    html: `
+                        <div class="pillar-head">${title}</div>
+                        <div class="kong-wang">${d.xunkong}</div>
+                        <div class="life-stage">${changsheng}</div>
+                        <div class="gan-zhi ${isDay?'text-purple-700':''}">${d.gan}${d.zhi}</div>
+                        <div class="na-yin">${d.nayin}</div>
+                        <div class="hidden-stems">
+                            <div class="flex gap-2 text-[10px] text-gray-500 justify-center">${hiddenHTML}</div>
+                        </div>
+                    `,
+                    dataStr: `${d.gan}${d.zhi}`
+                };
+            };
+
+            const yearHTML = renderPillar("年柱", dataMap.year);
+            const monthHTML = renderPillar("月柱", dataMap.month);
+            const dayHTML = renderPillar("日柱 (元神)", dataMap.day, true);
+            const hourHTML = renderPillar("时柱", dataMap.hour);
+
+            document.getElementById('yearCard').innerHTML = yearHTML.html;
+            document.getElementById('monthCard').innerHTML = monthHTML.html;
+            document.getElementById('dayCard').innerHTML = dayHTML.html;
+            document.getElementById('hourCard').innerHTML = hourHTML.html;
+
+            let mingGong = "--", taiYuan = "--";
+            try { mingGong = toStr(bazi.getMingGong()); taiYuan = toStr(bazi.getTaiYuan()); } catch(e){}
+            document.getElementById('mingGong').innerText = mingGong;
+            document.getElementById('taiYuan').innerText = taiYuan;
+
+            const allChars = [yearGan, yearZhi, monthGan, monthZhi, dayGan, dayZhi, hourGan, hourZhi];
+            const wuxingCount = { '金':0, '木':0, '水':0, '火':0, '土':0 };
+            allChars.forEach(c => {
+                const wx = WUXING_MAP[c];
+                if(wx) wuxingCount[wx]++;
+            });
+            let wuxingHTML = '';
+            for(let [k,v] of Object.entries(wuxingCount)) {
+                wuxingHTML += `<div class="flex justify-between text-xs text-gray-600"><span>${k}</span><span class="font-bold">${v}</span></div>
+                <div class="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden mb-1"><div class="h-full bg-purple-500" style="width:${v*12.5}%"></div></div>`;
+            }
+            document.getElementById('wuxingStats').innerHTML = wuxingHTML;
+
+            let dayunHTML = '';
+            let currentDaYunStr = "未起运";
+            let futureDaYunStr = [];
+            
+            try {
+                const yun = bazi.getYun(gender);
+                const daYunArr = yun.getDaYun(); 
+                let startAge = 1;
+                if(daYunArr.length > 1) {
+                    try { startAge = daYunArr[1].getStartAge(); } catch(e) { startAge = 1; }
+                }
+                document.getElementById('startYunInfo').innerText = `${startAge}岁起运`;
+
+                const currentYear = new Date().getFullYear();
+                const birthYear = date.getFullYear();
+
+                for (let i = 1; i < Math.min(daYunArr.length, 9); i++) {
+                    const dy = daYunArr[i];
+                    const gz = toStr(dy.getGanZhi());
+                    let daYunStartAge = 0;
+                    let daYunEndAge = 0;
+                    try { daYunStartAge = dy.getStartAge(); daYunEndAge = dy.getEndAge(); } 
+                    catch(e) { daYunStartAge = i*10; daYunEndAge = (i+1)*10 - 1; }
+                    
+                    const startY = birthYear + daYunStartAge;
+                    const endY = birthYear + daYunEndAge;
+                    
+                    const isCurrent = (currentYear >= startY && currentYear <= endY);
+                    if(isCurrent) currentDaYunStr = `${gz}运 (${startY}年-${endY}年)`;
+                    futureDaYunStr.push(`${gz}(${daYunStartAge}-${daYunEndAge}岁)`);
+
+                    dayunHTML += `
+                        <div class="flex-shrink-0 w-20 p-2 rounded border text-center ${isCurrent?'bg-purple-600 text-white shadow-md transform scale-105':'bg-gray-50 text-gray-600'}">
+                            <div class="font-bold">${gz}</div>
+                            <div class="text-[10px] scale-90">${daYunStartAge}岁起</div>
+                        </div>
+                    `;
+                }
+            } catch(e) { dayunHTML = '<div class="p-2 text-xs text-gray-400">大运计算异常</div>'; }
+            document.getElementById('dayunList').innerHTML = dayunHTML;
+
+            let future12Years = [];
+            let startForecastYear = new Date().getFullYear();
+            try {
+                for(let i=0; i<12; i++) {
+                    const fy = startForecastYear + i;
+                    const tempSolar = Solar.fromYmd(fy, 6, 15); 
+                    const tempLunar = tempSolar.getLunar();
+                    const yearGZ = toStr(tempLunar.getYearInGanZhi());
+                    future12Years.push(`${fy}年(${yearGZ})`);
+                }
+            } catch(e) { future12Years.push("流年数据加载失败"); }
+
+            // ===========================================
+            // 🤖 AI 请求逻辑 (硅基流动适配)
+            // ===========================================
+            const prompt = `
+你是一位精通《三命通会》、《渊海子平》的资深命理大师。请根据以下**全维数据**进行终极批断。
+
+【基础档案】
+- 姓名：${name} (${gender==1?'男':'女'})
+- 八字：${yearHTML.dataStr} ${monthHTML.dataStr} ${dayHTML.dataStr} ${hourHTML.dataStr}
+- 纳音：${dataMap.year.nayin} / ${dataMap.month.nayin} / ${dataMap.day.nayin} / ${dataMap.hour.nayin}
+- 空亡：年[${dataMap.year.xunkong}] 月[${dataMap.month.xunkong}] 日[${dataMap.day.xunkong}] 时[${dataMap.hour.xunkong}]
+- 命宫：${mingGong} | 胎元：${taiYuan}
+- 五行统计：金${wuxingCount['金']} 木${wuxingCount['木']} 水${wuxingCount['水']} 火${wuxingCount['火']} 土${wuxingCount['土']}
+
+【运程数据】
+- 当前大运：**${currentDaYunStr}**
+- 大运序列：${futureDaYunStr.join(' -> ')}
+- 未来12年流年序列：${future12Years.join(', ')}
+
+【深度分析要求 (Markdown格式)】
+请撰写一份结构严谨、逻辑缜密、不搞封建迷信但保留专业术语的分析报告。
+
+### 1. 🌟 命局总成
+* **日元能量**：结合月令及五行个数，判断身强身弱。
+* **格局分析**：判断格局高低，结合“空亡”分析。
+* **神煞点睛**：推断关键神煞（如天乙贵人、桃花、羊刃），简述影响。
+
+### 2. ☯️ 命宫与胎元
+* 简析命宫与胎元对命局的补充作用。
+
+### 3. 💼 事业财运
+* 分析财星与官杀。如果财星坐“长生/帝旺”如何？如果落“空亡”有何风险？
+* 给出行业建议与求财方位。
+
+### 4. 🔮 未来12年流年吉凶详批 (表格形式)
+请以表格形式预测 **${startForecastYear}年至${startForecastYear+11}年** 的运势。
+* **表格列名**：年份 | 干支 | 评分(1-5星) | 核心关键词 | 简评 (结合流年干支与日主十神关系)。
+
+### 5. 📜 大师造命箴言
+* 针对命局最薄弱环节，给出具体的修身建议。
+`;
+
+            let aiResponseText = "";
+
+            if (model.includes("gemini")) {
+                // --- Gemini 接口 ---
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                });
+                const json = await response.json();
+                if (!response.ok) throw new Error(json.error?.message || "Gemini 请求失败");
+                aiResponseText = json.candidates[0].content.parts[0].text;
+
+            } else {
+                // --- 硅基流动 (SiliconFlow) 接口 ---
+                // 硅基流动的 API 地址通常是 https://api.siliconflow.cn/v1/chat/completions
+                // 兼容 OpenAI 格式
+                const url = "https://api.siliconflow.cn/v1/chat/completions";
+                
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}` // 硅基流动需要 Bearer Token
+                    },
+                    body: JSON.stringify({
+                        model: model, // 例如 deepseek-ai/DeepSeek-V3
+                        messages: [
+                            {"role": "system", "content": "你是一位专业的八字命理大师。"},
+                            {"role": "user", "content": prompt}
+                        ],
+                        stream: false
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errJson = await response.json();
+                    throw new Error(errJson.error?.message || `硅基流动请求失败: ${response.status}`);
+                }
+                
+                const json = await response.json();
+                aiResponseText = json.choices[0].message.content;
+            }
+
+            document.getElementById('aiContent').innerHTML = marked.parse(aiResponseText);
+            document.getElementById('aiContent').classList.remove('hidden');
+
+        } catch (e) {
+            document.getElementById('aiError').innerText = "发生错误：" + e.message;
+            document.getElementById('aiError').classList.remove('hidden');
+        } finally {
+            btn.disabled = false; btn.innerHTML = "🌌 启动 AI 批断";
+            document.getElementById('aiLoading').classList.add('hidden');
+            document.getElementById('resultPanel').scrollIntoView({ behavior: 'smooth' });
+        }
+    }
+</script>
+</body>
+</html>
