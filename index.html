@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini 智能八字排盘 (稳定连接版)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lunar-javascript/lunar.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        .pillar-box { @apply bg-teal-50 p-4 rounded-lg border border-teal-100 text-center; }
+        .gan-zhi-text { @apply text-2xl font-bold text-gray-800 my-2; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen py-10 px-4">
+
+<div class="max-w-3xl mx-auto">
+    
+    <div class="bg-white p-6 rounded-xl shadow-sm mb-6 border-l-4 border-teal-500">
+        <h3 class="text-lg font-bold mb-4 flex items-center text-teal-700">
+            🔧 API 连接设置
+        </h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-bold mb-2">Gemini API Key</label>
+                <input type="password" id="apiKey" class="w-full p-2 border rounded focus:outline-none focus:border-teal-500" placeholder="粘贴以 AIzaSy 开头的密钥">
+                <div class="mt-2 text-xs text-gray-500">
+                    <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-teal-600 hover:underline">👉 点此获取 Key</a>
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-bold mb-2">选择 AI 模型</label>
+                <select id="modelSelect" class="w-full p-2 border rounded focus:outline-none focus:border-teal-500">
+                    <option value="gemini-2.5-flash">Gemini 2.5 Flash (推荐)</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white p-8 rounded-xl shadow-lg mb-8">
+        <h2 class="text-3xl font-extrabold text-center text-teal-800 mb-8">🔮 Gemini 八字排盘</h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div><label class="block text-sm font-bold mb-2">姓名</label><input type="text" id="name" class="w-full p-3 border rounded-lg"></div>
+            <div><label class="block text-sm font-bold mb-2">性别</label><select id="gender" class="w-full p-3 border rounded-lg"><option value="1">男</option><option value="0">女</option></select></div>
+            <div><label class="block text-sm font-bold mb-2">出生日期</label><input type="date" id="birthDate" class="w-full p-3 border rounded-lg"></div>
+            <div><label class="block text-sm font-bold mb-2">出生时间</label><input type="time" id="birthTime" class="w-full p-3 border rounded-lg" value="12:00"></div>
+            <div class="md:col-span-2">
+                <label class="block text-sm font-bold mb-2">经度 (真太阳时)</label>
+                <input type="number" id="longitude" step="0.0001" class="w-full p-3 border rounded-lg" placeholder="例如北京: 116.4">
+            </div>
+        </div>
+
+        <button onclick="startCalculation()" id="submitBtn" class="w-full mt-8 bg-teal-600 text-white font-bold py-4 rounded-lg text-lg hover:bg-teal-700 transition-all shadow-md">
+            🚀 开始测算
+        </button>
+    </div>
+
+    <div id="resultArea" class="hidden">
+        <div class="bg-white p-8 rounded-xl shadow-lg mb-8">
+            <div class="grid grid-cols-4 gap-4 mb-6">
+                <div class="pillar-box"><div class="text-xs text-gray-500">年柱</div><div class="gan-zhi-text" id="yearPillar">--</div></div>
+                <div class="pillar-box"><div class="text-xs text-gray-500">月柱</div><div class="gan-zhi-text" id="monthPillar">--</div></div>
+                <div class="pillar-box bg-teal-100 border-teal-300"><div class="text-xs text-gray-500">日柱(你)</div><div class="gan-zhi-text" id="dayPillar">--</div></div>
+                <div class="pillar-box"><div class="text-xs text-gray-500">时柱</div><div class="gan-zhi-text" id="hourPillar">--</div></div>
+            </div>
+        </div>
+
+        <div class="bg-white p-8 rounded-xl shadow-lg border-t-4 border-teal-500">
+            <div id="aiLoading" class="hidden text-center py-10">
+                <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-teal-600 mx-auto mb-4"></div>
+                <p class="text-gray-600">正在请求 Google Gemini...</p>
+            </div>
+            <div id="aiContent" class="prose prose-teal max-w-none hidden"></div>
+            <div id="aiError" class="hidden bg-red-100 text-red-800 p-4 rounded-lg"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    async function startCalculation() {
+        // 1. 获取并清理 Key (关键修复：去除空格)
+        let apiKey = document.getElementById('apiKey').value || 'AIzaSyA_cQ53Daamd0kef3bAZKSQ1glKTjieUR8';
+        if(apiKey) apiKey = apiKey.trim(); 
+
+        const name = document.getElementById('name').value;
+        const dateStr = document.getElementById('birthDate').value;
+        const timeStr = document.getElementById('birthTime').value;
+        let longitude = parseFloat(document.getElementById('longitude').value) || 120.0;
+        const selectedModel = document.getElementById('modelSelect').value;
+
+        // 验证 Key
+        if (!apiKey) {
+            alert("⚠️ 错误：API Key 为空！\n请在最上方的输入框中粘贴您的 Google Gemini API Key。");
+            document.getElementById('apiKey').focus();
+            return;
+        }
+
+        if (!name || !dateStr || !timeStr) {
+            alert("请填写完整的出生信息");
+            return;
+        }
+
+        // UI 状态更新
+        const btn = document.getElementById('submitBtn');
+        btn.disabled = true;
+        btn.innerHTML = '⏳ 正在连接 Google...';
+        document.getElementById('resultArea').classList.remove('hidden');
+        document.getElementById('aiContent').classList.add('hidden');
+        document.getElementById('aiError').classList.add('hidden');
+        document.getElementById('aiLoading').classList.remove('hidden');
+
+        try {
+            // --- 计算逻辑 ---
+            const [y, m, d] = dateStr.split('-').map(Number);
+            const [hh, mm] = timeStr.split(':').map(Number);
+            const timeOffset = (longitude - 120) * 4;
+            let date = new Date(y, m - 1, d, hh, mm);
+            date.setMinutes(date.getMinutes() + timeOffset);
+
+            const solar = Solar.fromYmdHms(date.getFullYear(), date.getMonth()+1, date.getDate(), date.getHours(), date.getMinutes(), 0);
+            const lunar = solar.getLunar();
+            const bazi = lunar.getEightChar();
+            
+            // 显示排盘
+            document.getElementById('yearPillar').innerText = bazi.getYear();
+            document.getElementById('monthPillar').innerText = bazi.getMonth();
+            document.getElementById('dayPillar').innerText = bazi.getDay();
+            document.getElementById('hourPillar').innerText = bazi.getTime();
+
+            // --- AI 请求逻辑 (修复版) ---
+            const baziInfo = `姓名:${name}, 性别:${document.getElementById('gender').value==1?'男':'女'}, 八字:${bazi.getYear()} ${bazi.getMonth()} ${bazi.getDay()} ${bazi.getTime()}`;
+            
+            const prompt = `你是一位专业的八字命理师。请根据此信息进行深度性格和运势分析(Markdown格式，不包含迷信恐吓)：${baziInfo}`;
+            
+            // 构造请求 URL (确保 key 在 URL 中)
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`;
+            
+            // 发送请求
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    // 额外尝试在 Header 中也放入 Key，增加成功率
+                    'x-goog-api-key': apiKey 
+                },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: prompt }] }]
+                })
+            });
+
+            if (!response.ok) {
+                const errJson = await response.json();
+                throw new Error(errJson.error?.message || response.statusText);
+            }
+
+            const data = await response.json();
+            const text = data.candidates[0].content.parts[0].text;
+            
+            document.getElementById('aiContent').innerHTML = marked.parse(text);
+            document.getElementById('aiContent').classList.remove('hidden');
+
+        } catch (e) {
+            document.getElementById('aiError').innerHTML = `<strong>请求失败：</strong> ${e.message}<br><br>检查建议：<br>1. 确保 Key 没有复制多余的空格。<br>2. 确保 Key 是从 AI Studio 获取的 (AIzaSy开头)。`;
+            document.getElementById('aiError').classList.remove('hidden');
+        } finally {
+            document.getElementById('aiLoading').classList.add('hidden');
+            btn.disabled = false;
+            btn.innerHTML = '🚀 重新测算';
+            document.getElementById('resultArea').scrollIntoView({ behavior: 'smooth' });
+        }
+    }
+</script>
+</body>
+</html>
